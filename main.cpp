@@ -1,38 +1,22 @@
 #include "mbed.h"
 
 class Sensor {
-  private:
+private:
     PinName pin;      // The GPIO pin to which the sensor is connected
     AnalogIn sensor_analog_input; // Used for analog sensors (if the sensor output is analog)
     bool state;       // Tracks the sensor's current state (on/off)
     int threshold;    // Threshold for determining if the sensor detects the line
 
-  public:
-   // Constructor: Initializes the sensor with a pin and defaults for state and threshold
+public:
+    Sensor() : pin(PA_0), sensor_analog_input(pin), state(false), threshold(500) {} // Default pin and threshold
+    // Constructor: Initializes the sensor with a pin and defaults for state and threshold
     Sensor(PinName pin, int threshold = 500)
         : pin(pin), sensor_analog_input(pin), state(false), threshold(threshold) {}
 
-        // Method to read the value from the sensor pin
-    // Returns a digital value (1 or 0) if it's a digital sensor
-    // Or returns a scaled analog value (0.0 to 1.0) if it's an analog sensor
+    // Method to read the value from the sensor pin
+    // Returns a scaled value (0 to 1000 for analog sensor)
     int read_value() {
-      return static_cast<int>(sensor_analog_input.read() * 1000);  // Read as an analog input and scale it to integer (0-1000)
-    }
-
-    // Method to turn the sensor on (this could involve setting the GPIO pin high or initializing it)
-    void turn_on() {
-        state = true;
-        // Logic to turn on the sensor can go here
-        // For example, setting the GPIO pin high for a digital sensor or enabling it in the case of analog
-        // This is just a placeholder for real hardware initialization
-    }
-
-    // Method to turn the sensor off (this could involve setting the GPIO pin low or disabling it)
-    void turn_off() {
-        state = false;
-        // Logic to turn off the sensor can go here
-        // For example, setting the GPIO pin low or disabling the sensor
-        // This is just a placeholder for real hardware deactivation
+        return static_cast<int>(sensor_analog_input.read() * 1000);  // Read as an analog input and scale it to integer (0-1000)
     }
 
     // Method to set the threshold (in case it's needed for line detection or other purposes)
@@ -40,35 +24,78 @@ class Sensor {
         threshold = new_threshold;
     }
 
-    // Method to check if the sensor has detected the line based on the threshold
-    bool is_line_detected() {
-        int value = read_value();
-        return value >= threshold;
-    }
-
-    // Getter for the state
-    bool get_state() {
-        return state;
-    }
-
     // Getter for the threshold
-    int get_threshold() {
+    int get_threshold() const {
         return threshold;
     }
-}
+};
+
+class SensorRig {
+private:
+    Sensor sensors[3];  // Array of 3 sensors (left, center, right)
+
+public:
+    // Constructor: Initializes the SensorRig with an array of sensors
+    SensorRig() {
+        sensors[0] = Sensor(A0);  // Left sensor
+        sensors[1] = Sensor(A1);  // Center sensor
+        sensors[2] = Sensor(A2);  // Right sensor
+    }
 
 
-// Declare an AnalogIn object for pin A0 (PA0)
-AnalogIn sensor_analog_input(A0);
+    // Method to calculate the error based on sensor readings
+    float calculate_error() {
+        int weighted_sum = 0;
+        int total_reading = 0;
+
+        // Example: Compute weighted sum of sensor readings
+        // Assuming sensor 0 is the leftmost sensor, sensor 1 is the center, and sensor 2 is the rightmost
+        for (size_t i = 0; i < 3; ++i) {
+            int sensor_value = sensors[i].read_value();
+            weighted_sum += (sensor_value * (i - 1)); // Weighted by position (left = -1, center = 0, right = 1)
+            total_reading += sensor_value;
+        }
+
+        // Calculate error: If all sensors are on the line, error should be zero
+        if (total_reading == 0) {
+            return 0;  // In case no sensor detects the line
+        }
+
+        return static_cast<float>(weighted_sum) / total_reading; // Normalize by total reading
+    }
+
+    // Method to collect readings from all sensors
+    void get_sensor_data() {
+        for (size_t i = 0; i < 3; ++i) {
+            printf("Sensor %d Value: %d\n", i, sensors[i].read_value());
+        }
+    }
+
+    // Method to calibrate the sensors (adjust thresholds)
+    void calibrate() {
+        for (size_t i = 0; i < 3; ++i) {
+            int calibration_value = sensors[i].read_value(); // Read value from sensor to set threshold
+            sensors[i].set_threshold(calibration_value);
+        }
+    }
+};
 
 int main() {
+    // Create a SensorRig object
+    SensorRig sensor_rig;  // Fixed: no parentheses needed
+
     while (true) {
-        // Read the value from the sensor pin (scaled to 0-1 range)
-        float sensor_value = sensor_analog_input.read(); 
-        
-        // Print the sensor value (0.0 to 1.0 range)
-        printf("Sensor Value: %.3f\n", sensor_value);
-        
-        wait(1);  // Wait for 1 second
+        // Calculate error based on the sensor readings
+        float error = sensor_rig.calculate_error();
+        printf("Line Error: %.3f\n", error);
+
+        // Get sensor data (useful for diagnostics)
+        sensor_rig.get_sensor_data();
+
+        // Calibrate sensors periodically
+        sensor_rig.calibrate();
+
+        // Wait for 1 second
+        wait(1);  // Use the correct wait function
     }
 }
