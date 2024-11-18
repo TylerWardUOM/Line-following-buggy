@@ -2,29 +2,24 @@
 
 class Sensor {
 private:
-    PinName pin;      // The GPIO pin to which the sensor is connected
-    AnalogIn sensor_analog_input; // Used for analog sensors (if the sensor output is analog)
-    bool state;       // Tracks the sensor's current state (on/off)
-    int threshold;    // Threshold for determining if the sensor detects the line
+    PinName pin;
+    AnalogIn sensor_analog_input;
+    bool state;       // functionality to be implemented reasearch darlington pairs
+    int threshold;
 
 public:
-    Sensor() : pin(PA_0), sensor_analog_input(pin), state(false), threshold(500) {} // Default pin and threshold
-    // Constructor: Initializes the sensor with a pin and defaults for state and threshold
+    Sensor() : pin(PA_0), sensor_analog_input(pin), threshold(500) {}
     Sensor(PinName pin, int threshold = 500)
-        : pin(pin), sensor_analog_input(pin), state(false), threshold(threshold) {}
+        : pin(pin), sensor_analog_input(pin), threshold(threshold) {}
 
-    // Method to read the value from the sensor pin
-    // Returns a scaled value (0 to 1000 for analog sensor)
     int read_value() {
-        return static_cast<int>(sensor_analog_input.read() * 1000);  // Read as an analog input and scale it to integer (0-1000)
+        return static_cast<int>(sensor_analog_input.read() * 1000);
     }
 
-    // Method to set the threshold (in case it's needed for line detection or other purposes)
     void set_threshold(int new_threshold) {
         threshold = new_threshold;
     }
 
-    // Getter for the threshold
     int get_threshold() const {
         return threshold;
     }
@@ -32,70 +27,77 @@ public:
 
 class SensorRig {
 private:
-    Sensor sensors[3];  // Array of 3 sensors (left, center, right)
+    Sensor sensors[3];
 
 public:
-    // Constructor: Initializes the SensorRig with an array of sensors
     SensorRig() {
-        sensors[0] = Sensor(A0);  // Left sensor
-        sensors[1] = Sensor(A1);  // Center sensor
-        sensors[2] = Sensor(A2);  // Right sensor
+        sensors[0] = Sensor(A0);
+        sensors[1] = Sensor(A1);
+        sensors[2] = Sensor(A2);
     }
 
-
-    // Method to calculate the error based on sensor readings
     float calculate_error() {
         int weighted_sum = 0;
         int total_reading = 0;
 
-        // Example: Compute weighted sum of sensor readings
-        // Assuming sensor 0 is the leftmost sensor, sensor 1 is the center, and sensor 2 is the rightmost
         for (size_t i = 0; i < 3; ++i) {
             int sensor_value = sensors[i].read_value();
-            weighted_sum += (sensor_value * (i - 1)); // Weighted by position (left = -1, center = 0, right = 1)
+            weighted_sum += (sensor_value * (i - 1));
             total_reading += sensor_value;
         }
 
-        // Calculate error: If all sensors are on the line, error should be zero
         if (total_reading == 0) {
-            return 0;  // In case no sensor detects the line
+            return 0;
         }
 
-        return static_cast<float>(weighted_sum) / total_reading; // Normalize by total reading
+        return static_cast<float>(weighted_sum) / total_reading;
     }
 
-    // Method to collect readings from all sensors
-    void get_sensor_data() {
+    void get_sensor_data(int* readings) {
         for (size_t i = 0; i < 3; ++i) {
-            printf("Sensor %d Value: %d\n", i, sensors[i].read_value());
-        }
-    }
-
-    // Method to calibrate the sensors (adjust thresholds)
-    void calibrate() {
-        for (size_t i = 0; i < 3; ++i) {
-            int calibration_value = sensors[i].read_value(); // Read value from sensor to set threshold
-            sensors[i].set_threshold(calibration_value);
+            readings[i] = sensors[i].read_value();
         }
     }
 };
 
 int main() {
-    // Create a SensorRig object
-    SensorRig sensor_rig;  // Fixed: no parentheses needed
+    SensorRig sensor_rig;
 
-    while (true) {
-        // Calculate error based on the sensor readings
+    Timer timer;
+    const int log_duration = 10; // Log for 10 seconds
+    const float sample_interval_s = 0.2; // Sample every 200 ms (in seconds)
+    const int max_samples = log_duration / sample_interval_s;
+
+    int sensor_readings[max_samples][3]; // Log sensor readings
+    float error_log[max_samples];       // Log error values
+    int sample_count = 0;
+
+    timer.start();
+    printf("Time (s),Sensor 0,Sensor 1,Sensor 2,Error\n");
+    fflush(stdout);
+
+    while (timer.read() < log_duration && sample_count < max_samples) {
+        int readings[3];
+        sensor_rig.get_sensor_data(readings);
         float error = sensor_rig.calculate_error();
-        printf("Line Error: %.3f\n", error);
 
-        // Get sensor data (useful for diagnostics)
-        sensor_rig.get_sensor_data();
+        for (int i = 0; i < 3; ++i) {
+            sensor_readings[sample_count][i] = readings[i];
+        }
+        error_log[sample_count] = error*1000;
 
-        // Calibrate sensors periodically
-        sensor_rig.calibrate();
+        sample_count++;
 
-        // Wait for 1 second
-        wait(1);  // Use the correct wait function
+        // Sleep for the next sample
+        wait(sample_interval_s);
     }
+
+    // Output data in CSV format for easy plotting
+    for (int i = 0; i < sample_count; ++i) {
+        float time = i * sample_interval_s;
+        printf("%.2f,%d,%d,%d,%.3f\n", time, sensor_readings[i][0], sensor_readings[i][1], sensor_readings[i][2], error_log[i]);
+        fflush(stdout);
+    }
+
+    return 0;
 }
