@@ -1,0 +1,226 @@
+Steps to Plot Both Sensor Data and Path:
+Sensor Data Plot:
+
+Use the FuncAnimation approach to dynamically plot the sensor data against time.
+This part is similar to what we already implemented.
+Path Plot Using Encoder Data:
+
+Calculate the buggy's position (x, y) over time using the wheel encoder data.
+Assuming you know the wheel radius and encoder resolution, you can compute the distance each wheel has traveled.
+Use differential drive kinematics to compute the change in position and orientation of the buggy.
+Combine Both Plots:
+
+Use matplotlib's subplot feature to display the sensor data and the path in separate panels within the same figure.
+Differential Drive Kinematics:
+For a buggy with two wheels:
+
+Inputs: Encoder counts for left (enc_left) and right (enc_right) wheels, wheel radius R, and wheelbase L.
+Steps:
+Compute wheel displacements:
+distance_left
+=
+enc_left
+×
+2
+𝜋
+𝑅
+encoder_resolution
+distance_left= 
+encoder_resolution
+enc_left×2πR
+​
+ 
+distance_right
+=
+enc_right
+×
+2
+𝜋
+𝑅
+encoder_resolution
+distance_right= 
+encoder_resolution
+enc_right×2πR
+​
+ 
+Compute linear (v) and angular (\omega) velocities:
+𝑣
+=
+distance_left
++
+distance_right
+2
+v= 
+2
+distance_left+distance_right
+​
+ 
+𝜔
+=
+distance_right
+−
+distance_left
+𝐿
+ω= 
+L
+distance_right−distance_left
+​
+ 
+Update the buggy's position (x, y) and orientation (\theta):
+𝑥
++
+=
+𝑣
+⋅
+cos
+⁡
+(
+𝜃
+)
+⋅
+Δ
+𝑡
+x+=v⋅cos(θ)⋅Δt
+𝑦
++
+=
+𝑣
+⋅
+sin
+⁡
+(
+𝜃
+)
+⋅
+Δ
+𝑡
+y+=v⋅sin(θ)⋅Δt
+𝜃
++
+=
+𝜔
+⋅
+Δ
+𝑡
+θ+=ω⋅Δt
+Code Implementation:
+Here’s an example combining both sensor and path plotting:
+
+python
+Copy code
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import numpy as np
+
+# Example Data
+sensor_data = [
+    [0, 100, 200, 300],  # [time, sensor1, sensor2, sensor3]
+    [1, 150, 220, 310],
+    [2, 180, 240, 320],
+    [3, 200, 260, 330],
+    [4, 220, 280, 340],
+]
+
+encoder_data = [
+    [0, 0, 0],  # [time, left_encoder, right_encoder]
+    [1, 10, 12],
+    [2, 22, 26],
+    [3, 35, 40],
+    [4, 50, 60],
+]
+
+# Parameters for buggy
+WHEEL_RADIUS = 0.03  # 3 cm
+ENCODER_RESOLUTION = 360  # 360 pulses per revolution
+WHEELBASE = 0.2  # 20 cm
+DT = 1  # 1 second intervals
+
+# Initialize Path Variables
+x, y, theta = 0, 0, 0  # Starting at origin
+path_x, path_y = [x], [y]
+
+# Sensor Data Variables
+time_values = []
+sensor_series = [[] for _ in range(len(sensor_data[0]) - 1)]
+
+# Set up plots
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
+
+# Sensor data plot
+lines = [ax1.plot([], [], label=f"Sensor {i+1}")[0] for i in range(len(sensor_series))]
+ax1.set_xlim(0, 10)
+ax1.set_ylim(0, 400)
+ax1.set_xlabel("Time (s)")
+ax1.set_ylabel("Sensor Value")
+ax1.legend()
+ax1.set_title("Sensor Data")
+
+# Path plot
+path_line, = ax2.plot([], [], label="Path")
+ax2.set_xlim(-1, 1)
+ax2.set_ylim(-1, 1)
+ax2.set_xlabel("X Position (m)")
+ax2.set_ylabel("Y Position (m)")
+ax2.legend()
+ax2.set_title("Buggy Path")
+
+# Update function
+def update(frame):
+    global x, y, theta
+
+    # Update Sensor Data
+    if frame < len(sensor_data):
+        row = sensor_data[frame]
+        time_values.append(row[0])  # Append time
+        for i, value in enumerate(row[1:]):
+            sensor_series[i].append(value)  # Append corresponding values
+
+        for i, line in enumerate(lines):
+            line.set_data(time_values, sensor_series[i])
+
+    # Update Path
+    if frame < len(encoder_data):
+        _, left_enc, right_enc = encoder_data[frame]
+        distance_left = (left_enc * 2 * np.pi * WHEEL_RADIUS) / ENCODER_RESOLUTION
+        distance_right = (right_enc * 2 * np.pi * WHEEL_RADIUS) / ENCODER_RESOLUTION
+
+        # Compute linear and angular velocities
+        v = (distance_left + distance_right) / 2
+        omega = (distance_right - distance_left) / WHEELBASE
+
+        # Update position and orientation
+        x += v * np.cos(theta) * DT
+        y += v * np.sin(theta) * DT
+        theta += omega * DT
+
+        path_x.append(x)
+        path_y.append(y)
+        path_line.set_data(path_x, path_y)
+
+    # Adjust axes limits dynamically
+    ax1.set_xlim(max(0, time_values[-1] - 10), time_values[-1] + 1)
+    ax1.set_ylim(0, max(max(series) for series in sensor_series) + 50)
+    ax2.set_xlim(min(path_x) - 0.1, max(path_x) + 0.1)
+    ax2.set_ylim(min(path_y) - 0.1, max(path_y) + 0.1)
+
+# Animation
+ani = FuncAnimation(fig, update, frames=max(len(sensor_data), len(encoder_data)), interval=1000)
+plt.tight_layout()
+plt.show()
+Explanation:
+Sensor Plot:
+
+Displays sensor values over time.
+Dynamically updates as data comes in.
+Path Plot:
+
+Calculates and visualizes the buggy's path based on encoder data.
+Uses differential drive kinematics to compute the position.
+Dynamic Axes:
+
+Sensor plot updates x and y limits based on incoming data.
+Path plot adjusts to the current range of positions.
+Output:
+Top Plot: Sensor data vs. time.
+Bottom Plot: Path of the buggy in 2D space.
+You can further customize it to include speed or orientation diagnostics!

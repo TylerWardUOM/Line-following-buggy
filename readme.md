@@ -1,0 +1,1 @@
+Plan for diagnostics add button to the buggy so that after a run when plugged into computer pression button will dump data
